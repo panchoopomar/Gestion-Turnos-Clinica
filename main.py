@@ -78,7 +78,19 @@ class ClinicaApp:
     def crear_pantalla_login(self):
         self.limpiar_ventana()
         
-        tk.Label(self.root, text="Bienvenido a la Clínica", font=("Arial", 16, "bold")).pack(pady=10)
+        self.poner_imagen_fondo_login() #Pone el fondo de la pantalla de login
+        
+        btn_estilo_titulo = {
+            "bg": "#003B76",
+            "fg": "white",
+            "font": ("Times New Roman", 16, "roman"),
+            "relief": "flat",
+            "padx": 15,
+            "pady": 15
+        }
+        
+
+        tk.Label(self.root, text="Bienvenido a la Clínica", **btn_estilo_titulo).pack(pady=10)
 
         tk.Label(self.root, text="Email / Usuario:").pack()
         self.entry_usuario = tk.Entry(self.root)
@@ -124,8 +136,19 @@ class ClinicaApp:
     # !!!!!!!!!!! PANTALLA DE REGISTRO DE PACIENTE !!!!!!!!!!!!
     def crear_pantalla_registro(self):
         self.limpiar_ventana()
+        
+        self.poner_imagen_fondo_login() #Pone el fondo de la pantalla de login
+        
+        btn_estilo_titulo = {
+                    "bg": "#003B76",
+                    "fg": "white",
+                    "font": ("Times New Roman", 16, "roman"),
+                    "relief": "flat",
+                    "padx": 15,
+                    "pady": 15
+                }
 
-        tk.Label(self.root, text="Registro de Nuevo Paciente", font=("Arial", 14, "bold")).pack(pady=10)
+        tk.Label(self.root, text="Registro de Nuevo Paciente", **btn_estilo_titulo).pack(pady=10)
 
         tk.Label(self.root, text="Email:").pack()
         self.entry_reg_email = tk.Entry(self.root)
@@ -181,11 +204,14 @@ class ClinicaApp:
     # !!!!!!!!!!! PANTALLA DE ADMINISTRADOR !!!!!!!!!!
     def crear_pantalla_admin(self):
         self.limpiar_ventana()
-        self.root.geometry("700x500") # Agrandamos la ventana para que entre todo
+        self.root.geometry("950x700") # Agrandamos la ventana para que entre todo
+        
 
-        tk.Label(self.root, text="Panel de Administrador - Gestión de Médicos", font=("Arial", 16, "bold")).pack(pady=10)
+        self.poner_imagen_fondo_pac_y_admin() #Pone el fondo de la pantalla de admin
 
-        # Marco para el formulario )
+        tk.Label(self.root, text="Panel de Administrador - Gestión de Médicos", font=("Arial", 14, "bold")).pack(pady=10)
+
+        # Marco para el formulario 
         frame_form = tk.Frame(self.root)
         frame_form.pack(pady=10)
 
@@ -375,7 +401,9 @@ class ClinicaApp:
 
     def crear_pantalla_paciente(self):
         self.limpiar_ventana()
-        self.root.geometry("750x550")
+        self.root.geometry("950x700")
+        
+        self.poner_imagen_fondo_pac_y_admin() #Pone el fondo de la pantalla de paciente
 
         tk.Label(self.root, text=f"Panel de Paciente - Solicitar Turno", font=("Arial", 16, "bold")).pack(pady=10)
 
@@ -424,9 +452,7 @@ class ClinicaApp:
         # Sección para ver turnos solicitados
         tk.Label(self.root, text="Mis Turnos Reservados:", font=("Arial", 11, "bold")).pack(anchor="w", padx=20, pady=5)
         
-        # Botón para cerrar sesión
-        tk.Button(self.root, text="Cerrar Sesión", command=self.crear_pantalla_login, bg="#f8d7da", fg="#842029", width=25).pack(pady=10)
-        
+       
         self.tabla_mis_turnos = ttk.Treeview(self.root, columns=("ID", "Médico", "Especialidad", "Días", "Horarios"), show="headings", height=5)
         self.tabla_mis_turnos.heading("ID", text="ID")
         self.tabla_mis_turnos.heading("Médico", text="Médico")
@@ -441,9 +467,9 @@ class ClinicaApp:
         self.tabla_mis_turnos.column("Horarios", width=120)
         self.tabla_mis_turnos.pack(pady=5, fill="x", padx=20)
 
-        # Botones inferiores (Cerrar sesión)
-        tk.Button(self.root, text="Cerrar Sesión", command=self.crear_pantalla_login, width=20).pack(pady=10)
-
+        # Botón para cerrar sesión
+        tk.Button(self.root, text="Cerrar Sesión", command=self.crear_pantalla_login, bg="#f8d7da", fg="#842029", width=25).pack(pady=10)
+        
         # Cargar datos iniciales en las tablas
         self.cargar_medicos_paciente()
         self.cargar_mis_turnos()
@@ -595,6 +621,33 @@ class ClinicaApp:
             self.combo_dia_turno.set(lista_dias[0])
         else:
             self.combo_dia_turno.set("")
+            
+    def poner_imagen_fondo_login(self):
+            #Carga la imagen
+            self.imagen_fondo = tk.PhotoImage(file="fondo_azul.png")
+            
+            #Crea un Label que contenga la imagen
+            self.label_fondo = tk.Label(self.root, image=self.imagen_fondo)
+            
+            #La posiciona para que cubra el 100% del ancho y alto de la ventana
+            self.label_fondo.place(x=0, y=0, relwidth=1, relheight=1)
+            
+            # Manda el fondo al nivel más bajo para que los botones, entradas y textos queden por ARRIBA de la imagen.
+            self.label_fondo.lower()
+            
+    def poner_imagen_fondo_pac_y_admin(self):
+                #Carga la imagen
+                self.imagen_fondo = tk.PhotoImage(file="fondo-paciente-admin.png")
+                
+                #Crea un Label que contenga la imagen
+                self.label_fondo = tk.Label(self.root, image=self.imagen_fondo)
+                
+                #La posiciona para que cubra el 100% del ancho y alto de la ventana
+                self.label_fondo.place(x=0, y=0, relwidth=1, relheight=1)
+                
+                # Manda el fondo al nivel más bajo para que los botones, entradas y textos queden por ARRIBA de la imagen.
+                self.label_fondo.lower()
+        
 
 # !!!!!!!!!!!! Ejecución del programa !!!!!!!!!!
 if __name__ == "__main__":
