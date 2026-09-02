@@ -213,6 +213,21 @@ class ClinicaApp:
         tk.Button(frame_botones, text="Modificar", command=self.modificar_medico, width=15).grid(row=0, column=1, padx=10)
         tk.Button(frame_botones, text="Eliminar", command=self.eliminar_medico, width=15).grid(row=0, column=2, padx=10)
         tk.Button(frame_botones, text="Cerrar Sesión", command=self.crear_pantalla_login, width=15).grid(row=0, column=3, padx=10)
+        
+        # Sección de reinicio de turnos específico
+        frame_reinicio = tk.LabelFrame(self.root, text="Gestión y Reinicio de Turnos", padx=10, pady=10)
+        frame_reinicio.pack(pady=10, fill="x", padx=20)
+
+        tk.Label(frame_reinicio, text="Médico (o dejar en blanco para TODOS):").pack(anchor="w")
+        self.entry_admin_medico = tk.Entry(frame_reinicio, width=30)
+        self.entry_admin_medico.pack(anchor="w", pady=2)
+
+        tk.Label(frame_reinicio, text="Día de la semana a reiniciar (ej: Miércoles / Lunes):").pack(anchor="w")
+        self.entry_admin_dia = tk.Entry(frame_reinicio, width=20)
+        self.entry_admin_dia.pack(anchor="w", pady=2)
+        
+        # Boton para reiniciar los turnos del sistema
+        tk.Button(frame_reinicio, text="Reiniciar Turnos Filtrados", command=self.admin_reiniciar_turnos_especifico, bg="#fff3cd", width=30).pack(pady=8)
 
         # Tabla (Treeview) para mostrar a los médicos
         self.tabla_medicos = ttk.Treeview(self.root, columns=("ID", "Nombre", "Especialidad", "Días", "Horarios"), show="headings")
@@ -355,6 +370,7 @@ class ClinicaApp:
             self.cargar_medicos()
             messagebox.showinfo("Éxito", "Médico eliminado.")
             
+        
     # !!!!!!!!!!!!!!!!!!! PANTALLA DE PACIENTE - BÚSQUEDA Y TURNOS !!!!!!!!!!!!!!!!!!
 
     def crear_pantalla_paciente(self):
@@ -390,12 +406,26 @@ class ClinicaApp:
         self.tabla_medicos_paciente.column("Días", width=120)
         self.tabla_medicos_paciente.column("Horarios", width=120)
         self.tabla_medicos_paciente.pack(pady=5, fill="x", padx=20)
+        
+       # Selector de día de la semana para el turno
+        frame_dia = tk.Frame(self.root)
+        frame_dia.pack(pady=5)
+
+        tk.Label(frame_dia, text="Seleccione el día deseado:").pack(side=tk.LEFT, padx=5)
+        self.combo_dia_turno = ttk.Combobox(frame_dia, width=18, state="readonly")
+        self.combo_dia_turno.pack(side=tk.LEFT, padx=5)
+
+        # Enlazamos la tabla de médicos para que al hacer clic se actualicen los días del combobox
+        self.tabla_medicos_paciente.bind("<<TreeviewSelect>>", self.actualizar_dias_medico)
 
         # Botón para solicitar turno
         tk.Button(self.root, text="Solicitar Turno con el Médico Seleccionado", command=self.solicitar_turno, bg="#d1e7dd", width=40).pack(pady=10)
 
         # Sección para ver turnos solicitados
         tk.Label(self.root, text="Mis Turnos Reservados:", font=("Arial", 11, "bold")).pack(anchor="w", padx=20, pady=5)
+        
+        # Botón para cerrar sesión
+        tk.Button(self.root, text="Cerrar Sesión", command=self.crear_pantalla_login, bg="#f8d7da", fg="#842029", width=25).pack(pady=10)
         
         self.tabla_mis_turnos = ttk.Treeview(self.root, columns=("ID", "Médico", "Especialidad", "Días", "Horarios"), show="headings", height=5)
         self.tabla_mis_turnos.heading("ID", text="ID")
@@ -458,28 +488,43 @@ class ClinicaApp:
                 self.tabla_medicos_paciente.insert("", tk.END, values=fila)
 
     def solicitar_turno(self):
-        """Registra un turno para el paciente logueado con el médico seleccionado."""
+        """Registra un turno validando el límite de 16 turnos por día de la semana."""
         item_seleccionado = self.tabla_medicos_paciente.focus()
         if not item_seleccionado:
-            messagebox.showwarning("Error", "Por favor, seleccione un médico de la tabla para solicitar el turno.")
+            messagebox.showwarning("Error", "Por favor, seleccione un médico de la tabla.")
             return
 
         valores = self.tabla_medicos_paciente.item(item_seleccionado, "values")
         nombre_medico = valores[1]
         especialidad = valores[2]
-        dias = valores[3]
         horarios = valores[4]
+        
+        #día que eligió el paciente en el menú desplegable
+        dia_elegido = self.combo_dia_turno.get()
 
         conexion = sqlite3.connect("clinica.db")
         cursor = conexion.cursor()
+
+        #turnos que tiene ESTE médico en ESTE DÍA específico de la semana
+        cursor.execute("SELECT COUNT(*) FROM turnos WHERE medico = ? AND dia = ?", (nombre_medico, dia_elegido))
+        cantidad_turnos_dia = cursor.fetchone()[0]
+
+        #límite de 16 turnos diarios
+        LIMITE_DIARIO = 16
+        if cantidad_turnos_dia >= LIMITE_DIARIO:
+            messagebox.showerror("Límite Alcanzado", f"El/la Dr./Dra. {nombre_medico} ya alcanzó el límite máximo de {LIMITE_DIARIO} turnos para el día {dia_elegido}.")
+            conexion.close()
+            return
+
+        #Guardar el turno especificando el día seleccionado
         cursor.execute("INSERT INTO turnos (paciente, medico, especialidad, dia, horario) VALUES (?, ?, ?, ?, ?)",
-                       (self.usuario_actual, nombre_medico, especialidad, dias, horarios))
+                       (self.usuario_actual, nombre_medico, especialidad, dia_elegido, horarios))
         conexion.commit()
         conexion.close()
 
-        messagebox.showinfo("Éxito", f"¡Turno reservado con éxito!\nDr./Dra. {nombre_medico} ({especialidad})\nDías: {dias} - Horarios: {horarios}")
+        messagebox.showinfo("Éxito", f"¡Turno reservado!\nDr./Dra. {nombre_medico}\nDía: {dia_elegido} | Horario: {horarios}\n(Turno {cantidad_turnos_dia + 1} de {LIMITE_DIARIO} para este día)")
         self.cargar_mis_turnos()
-
+        
     def cargar_mis_turnos(self):
         """Muestra los turnos reservados por el paciente actualmente logueado."""
         for fila in self.tabla_mis_turnos.get_children():
@@ -493,12 +538,66 @@ class ClinicaApp:
 
         for fila in filas:
             self.tabla_mis_turnos.insert("", tk.END, values=fila)
+            
+    
+    def admin_reiniciar_turnos_especifico(self):
+        """Permite al administrador reiniciar los turnos de un médico en un día, o de todos los médicos en un día."""
+        medico_filtro = self.entry_admin_medico.get().strip()
+        dia_filtro = self.entry_admin_dia.get().strip()
+
+        if not dia_filtro:
+            messagebox.showwarning("Atención", "Por lo menos debés indicar el día de la semana a reiniciar (ej: Lunes).")
+            return
+
+        conexion = sqlite3.connect("clinica.db")
+        cursor = conexion.cursor()
+
+        if medico_filtro:
+            #Borrar turnos de UN médico en UN día específico (ej: Juan el miércoles)
+            confirmacion = messagebox.askyesno("Confirmar", f"¿Eliminar los turnos del Dr./Dra. {medico_filtro} para el día {dia_filtro}?")
+            if confirmacion:
+                cursor.execute("DELETE FROM turnos WHERE medico LIKE ? AND dia = ?", ('%' + medico_filtro + '%', dia_filtro))
+                conexion.commit()
+                messagebox.showinfo("Éxito", f"Se reiniciaron los turnos de {medico_filtro} para el día {dia_filtro}.")
+        else:
+            #Borrar turnos de TODOS los médicos para UN día específico (ej: todos el lunes)
+            confirmacion = messagebox.askyesno("Confirmar", f"¿Eliminar los turnos de TODOS los médicos para el día {dia_filtro}?")
+            if confirmacion:
+                cursor.execute("DELETE FROM turnos WHERE dia = ?", (dia_filtro,))
+                conexion.commit()
+                messagebox.showinfo("Éxito", f"Se reiniciaron los turnos de todos los médicos para el día {dia_filtro}.")
+
+        conexion.close()
+        
+        # Limpia los campos
+        self.entry_admin_medico.delete(0, tk.END)
+        self.entry_admin_dia.delete(0, tk.END)
+        
+        
+    def actualizar_dias_medico(self, event):
+        """Actualiza dinámicamente el combobox de días según los días que atiende el médico seleccionado."""
+        item_seleccionado = self.tabla_medicos_paciente.focus()
+        if not item_seleccionado:
+            return
+
+        valores = self.tabla_medicos_paciente.item(item_seleccionado, "values")
+        
+        dias_texto = valores[3] 
+
+        #Limpia y separa los días en una lista
+        lista_dias = [dia.strip() for dia in dias_texto.replace(" y ", ",").split(",")]
+
+        #Actualiza las opciones disponibles en el Combobox
+        self.combo_dia_turno['values'] = lista_dias
+        
+        #Selecciona el primer día por defecto si hay opciones
+        if lista_dias:
+            self.combo_dia_turno.set(lista_dias[0])
+        else:
+            self.combo_dia_turno.set("")
 
 # !!!!!!!!!!!! Ejecución del programa !!!!!!!!!!
 if __name__ == "__main__":
     ventana_principal = tk.Tk()
     app = ClinicaApp(ventana_principal)
     ventana_principal.mainloop()
-    
-    
-    
