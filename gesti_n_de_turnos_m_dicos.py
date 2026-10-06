@@ -250,13 +250,9 @@ class ClinicaApp:
         self.entry_med_especialidad = tk.Entry(frame_form)
         self.entry_med_especialidad.grid(row=0, column=3, padx=5, pady=5)
 
-        tk.Label(frame_form, text="Días:").grid(row=1, column=0, padx=5, pady=5)
-        self.entry_med_dias = tk.Entry(frame_form)
-        self.entry_med_dias.grid(row=1, column=1, padx=5, pady=5)
-
-        tk.Label(frame_form, text="Horarios (ej: 8:00 a 12:30 y 15:00 a 19:30):").grid(row=1, column=2, padx=5, pady=5)
-        self.entry_med_horarios = tk.Entry(frame_form)
-        self.entry_med_horarios.grid(row=1, column=3, padx=5, pady=5)
+        self.horarios_temporales = {} # Inicializamos el diccionario de turnos
+        tk.Label(frame_form, text="Disponibilidad:").grid(row=1, column=0, padx=5, pady=5)
+        tk.Button(frame_form, text="Asignar horario a médico", command=self.abrir_ventana_horarios, bg="#cfe2ff").grid(row=1, column=1, columnspan=3, pady=5, sticky="we")
 
         frame_botones = tk.Frame(self.root)
         frame_botones.pack(pady=10)
@@ -297,6 +293,58 @@ class ClinicaApp:
         
         self.cargar_medicos()
         
+    def abrir_ventana_horarios(self):
+        ventana = tk.Toplevel(self.root)
+        ventana.title("Asignar Horario a Médico")
+        ventana.geometry("400x350")
+        ventana.transient(self.root)
+        ventana.grab_set() 
+        
+        tk.Label(ventana, text="Seleccione los días y asigne su horario:", font=("Arial", 11, "bold")).pack(pady=10)
+        
+        frame_dias = tk.Frame(ventana)
+        frame_dias.pack(pady=5, padx=20, fill="both", expand=True)
+        
+        dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+        
+        self.variables_dias = {}
+        self.entradas_horarios = {}
+        
+        if not hasattr(self, 'horarios_temporales'):
+            self.horarios_temporales = {}
+            
+        for i, dia in enumerate(dias_semana):
+            var_chk = tk.BooleanVar(value=(dia in self.horarios_temporales))
+            chk = tk.Checkbutton(frame_dias, text=dia, variable=var_chk)
+            chk.grid(row=i, column=0, sticky="w", pady=2)
+            
+            ent = tk.Entry(frame_dias, width=30)
+            if dia in self.horarios_temporales:
+                ent.insert(0, self.horarios_temporales[dia])
+            else:
+                ent.insert(0, "8:00 a 12:00 y 16:00 a 20:30")
+            ent.grid(row=i, column=1, padx=10, pady=2)
+            
+            self.variables_dias[dia] = var_chk
+            self.entradas_horarios[dia] = ent
+            
+        def guardar_horarios():
+            self.horarios_temporales = {}
+            for d in dias_semana:
+                if self.variables_dias[d].get(): 
+                    horario = self.entradas_horarios[d].get().strip()
+                    if horario:
+                        self.horarios_temporales[d] = horario
+            
+            if not self.horarios_temporales:
+                messagebox.showwarning("Atención", "No ha seleccionado ningún día.", parent=ventana)
+                return
+                
+            messagebox.showinfo("Éxito", "Horarios asignados. Presione Agregar/Modificar para guardar.", parent=ventana)
+            ventana.destroy()
+            
+        tk.Button(ventana, text="Guardar Horarios", command=guardar_horarios, bg="#d1e7dd").pack(pady=10)
+        
     def cargar_medicos(self):
         for fila in self.tabla_medicos.get_children():
             self.tabla_medicos.delete(fila)
@@ -313,26 +361,34 @@ class ClinicaApp:
     def limpiar_campos_medico(self):
         self.entry_med_nombre.delete(0, tk.END)
         self.entry_med_especialidad.delete(0, tk.END)
-        self.entry_med_dias.delete(0, tk.END)
-        self.entry_med_horarios.delete(0, tk.END)
+        self.horarios_temporales = {} # Resetea la memoria temporal
 
     def agregar_medico(self):
         nombre = self.entry_med_nombre.get().strip()
         especialidad = self.entry_med_especialidad.get().strip()
-        dias = self.entry_med_dias.get().strip()
-        horarios = self.entry_med_horarios.get().strip()
-
-        if not nombre or not especialidad or not dias or not horarios:
-            messagebox.showwarning("Error", "Todos los campos son obligatorios.")
+        
+        if not nombre or not especialidad:
+            messagebox.showwarning("Error", "El nombre y especialidad son obligatorios.")
             return
-
+            
+        if not hasattr(self, 'horarios_temporales') or not self.horarios_temporales:
+            messagebox.showwarning("Error", "Debe asignar días y horarios haciendo clic en 'Asignar horario a médico'.")
+            return
+            
+        dias = ", ".join(self.horarios_temporales.keys())
+        
+        # --- NUEVO: Convertimos los horarios a Texto Plano (Ej: Lunes=8:00|Martes=10:00) ---
+        lista_str = []
+        for d, h in self.horarios_temporales.items():
+            lista_str.append(f"{d}={h}")
+        horarios_texto = "|".join(lista_str)
+        
         conexion = sqlite3.connect("clinica.db")
         cursor = conexion.cursor()
         cursor.execute("INSERT INTO medicos (nombre, especialidad, dias_atencion, horarios) VALUES (?, ?, ?, ?)",
-                       (nombre, especialidad, dias, horarios))
+                       (nombre, especialidad, dias, horarios_texto))
         conexion.commit()
         conexion.close()
-
         messagebox.showinfo("Éxito", "Médico agregado correctamente.")
         self.limpiar_campos_medico()
         self.cargar_medicos()
@@ -346,35 +402,53 @@ class ClinicaApp:
         self.limpiar_campos_medico()
         self.entry_med_nombre.insert(0, valores[1])
         self.entry_med_especialidad.insert(0, valores[2])
-        self.entry_med_dias.insert(0, valores[3])
-        self.entry_med_horarios.insert(0, valores[4])
+        
+        # --- NUEVO: Leemos el Texto de SQLite y lo volvemos a separar ---
+        self.horarios_temporales = {}
+        horarios_guardados = valores[4]
+        if horarios_guardados:
+            # Si el texto tiene el formato nuevo con "|"
+            if "|" in horarios_guardados or "=" in horarios_guardados:
+                pares = horarios_guardados.split("|")
+                for par in pares:
+                    if "=" in par:
+                        dia, hor = par.split("=")
+                        self.horarios_temporales[dia] = hor
+            else:
+                # Para evitar errores si tenías médicos viejos guardados sin formato
+                pass 
 
     def modificar_medico(self):
         item_seleccionado = self.tabla_medicos.focus()
         if not item_seleccionado:
             messagebox.showwarning("Error", "Seleccione un médico de la tabla para modificar.")
             return
-
+        
         id_medico = self.tabla_medicos.item(item_seleccionado, "values")[0]
         nombre = self.entry_med_nombre.get().strip()
         especialidad = self.entry_med_especialidad.get().strip()
-        dias = self.entry_med_dias.get().strip()
-        horarios = self.entry_med_horarios.get().strip()
-
-        if not nombre or not especialidad or not dias or not horarios:
-            messagebox.showwarning("Error", "Todos los campos son obligatorios.")
+        
+        if not nombre or not especialidad or not self.horarios_temporales:
+            messagebox.showwarning("Error", "Complete nombre, especialidad y asigne horarios.")
             return
-
+            
+        dias = ", ".join(self.horarios_temporales.keys())
+        
+        # --- NUEVO: Convertimos a Texto Plano ---
+        lista_str = []
+        for d, h in self.horarios_temporales.items():
+            lista_str.append(f"{d}={h}")
+        horarios_texto = "|".join(lista_str)
+        
         conexion = sqlite3.connect("clinica.db")
         cursor = conexion.cursor()
         cursor.execute('''
             UPDATE medicos 
             SET nombre=?, especialidad=?, dias_atencion=?, horarios=? 
             WHERE id=?
-        ''', (nombre, especialidad, dias, horarios, id_medico))
+        ''', (nombre, especialidad, dias, horarios_texto, id_medico))
         conexion.commit()
         conexion.close()
-
         messagebox.showinfo("Éxito", "Datos actualizados correctamente.")
         self.limpiar_campos_medico()
         self.cargar_medicos()
@@ -571,30 +645,49 @@ class ClinicaApp:
     def actualizar_horarios_disponibles(self, event=None):
         item_seleccionado = self.tabla_medicos_paciente.focus()
         dia_elegido = self.combo_dia_turno.get()
-
+        
         if not item_seleccionado or not dia_elegido:
             self.combo_horario_turno['values'] = []
             self.combo_horario_turno.set("")
             return
-
+            
         valores = self.tabla_medicos_paciente.item(item_seleccionado, "values")
         nombre_medico = valores[1]
-        horarios_string = valores[4]
-
-        # 1. Generar todos los bloques de 30 min posibles según el rango del médico
-        todos_los_bloques = self.generar_bloques_horarios(horarios_string)
-
-        # 2. Consultar turnos ya reservados para ese médico en ese día
+        horarios_string = valores[4] # Ej: "Lunes=8:00 a 12:00|Martes=16:00 a 20:30"
+        
+        # --- NUEVO: Buscamos el horario para el día elegido leyendo el texto ---
+        horario_del_dia = ""
+        if "|" in horarios_string or "=" in horarios_string:
+            pares = horarios_string.split("|")
+            for par in pares:
+                if "=" in par:
+                    dia_db, hor_db = par.split("=")
+                    if dia_db == dia_elegido:
+                        horario_del_dia = hor_db
+                        break
+        else:
+            # Soporte por si quedan médicos viejos guardados de la forma antigua
+            horario_del_dia = horarios_string
+            
+        if not horario_del_dia:
+            self.combo_horario_turno['values'] = []
+            self.combo_horario_turno.set("Sin horarios dispon.")
+            return
+            
+        # 1. Generamos los bloques de 30 min solo con el horario extraído para ese día
+        todos_los_bloques = self.generar_bloques_horarios(horario_del_dia)
+        
+        # 2. Consultar SQLite para ver turnos ya reservados y quitarlos
         conexion = sqlite3.connect("clinica.db")
         cursor = conexion.cursor()
         cursor.execute("SELECT horario FROM turnos WHERE medico = ? AND dia = ?", (nombre_medico, dia_elegido))
         turnos_reservados = [fila[0] for fila in cursor.fetchall()]
         conexion.close()
-
-        # 3. Filtrar los bloques ocupados
+        
+        # 3. Filtrar los disponibles
         bloques_disponibles = [b for b in todos_los_bloques if b not in turnos_reservados]
-
         self.combo_horario_turno['values'] = bloques_disponibles
+        
         if bloques_disponibles:
             self.combo_horario_turno.set(bloques_disponibles[0])
         else:
